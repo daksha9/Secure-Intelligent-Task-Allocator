@@ -1,0 +1,911 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Secure Intelligent Task Allocation System</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=IBM+Plex+Mono:wght@300;400;500&family=Exo+2:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+/* ══════════════════════════════════════
+   ROOT VARIABLES
+══════════════════════════════════════ */
+:root {
+  --bg:             #0a0a0a;
+  --accent-cyan:    #0088cc;
+  --accent-blue:    #1a6cf5;
+  --accent-teal:    #00a99d;
+  --accent-green:   #00b870;
+  --accent-orange:  #f07c00;
+  --accent-red:     #e03050;
+  --text-primary:   #f0f6ff;
+  --text-secondary: #a0bcd8;
+  --text-muted:     #4a6a88;
+  --text-card:      #0d1f35;
+  --text-card-sec:  #3a5a78;
+  --text-card-muted:#7a9ab8;
+  --border:         rgba(255,255,255,0.1);
+  --border-hover:   rgba(0,136,204,0.5);
+  --glow:           0 0 24px rgba(0,136,204,0.3);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: 'Exo 2', sans-serif;
+  background: #0a0a0a;
+  color: var(--text-primary);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ── GRID + GLOW BACKGROUND ── */
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  background:
+    radial-gradient(ellipse 70% 50% at 10% 10%, rgba(0,100,200,0.08) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 60% at 90% 90%, rgba(0,150,120,0.06) 0%, transparent 60%),
+    linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+  background-size: 100% 100%, 100% 100%, 44px 44px, 44px 44px;
+  pointer-events: none; z-index: 0;
+}
+
+/* ══════════════════════════════════════
+   LOADER
+══════════════════════════════════════ */
+#loader {
+  display: none; position: fixed; inset: 0;
+  background: rgba(0,0,0,0.97);
+  backdrop-filter: blur(16px);
+  flex-direction: column;
+  justify-content: center; align-items: center;
+  z-index: 9999; gap: 20px;
+}
+#loader.active { display: flex; }
+
+.loader-orbit {
+  position: relative; width: 100px; height: 100px;
+  display: flex; align-items: center; justify-content: center;
+}
+.orbit-ring {
+  position: absolute; inset: 0;
+  border-radius: 50%; border: 3px solid transparent;
+}
+.r1 { border-top-color:var(--accent-cyan); border-right-color:var(--accent-blue); animation:spin 0.85s linear infinite; box-shadow:0 0 28px rgba(0,136,204,0.5); }
+.r2 { inset:14px; border-bottom-color:var(--accent-teal); border-left-color:var(--accent-green); animation:spin 1.35s linear infinite reverse; }
+.r3 { inset:30px; border-top-color:var(--accent-orange); animation:spin 1.9s linear infinite; }
+@keyframes spin { to { transform:rotate(360deg); } }
+
+.loader-pct {
+  font-family:'IBM Plex Mono',monospace; font-size:2rem; font-weight:500;
+  color:var(--accent-cyan); letter-spacing:3px; text-shadow:0 0 20px rgba(0,136,204,0.7);
+}
+.progress-track { width:300px; height:4px; background:rgba(255,255,255,0.08); border-radius:4px; overflow:hidden; }
+.progress-fill {
+  height:100%; width:0%;
+  background:linear-gradient(90deg,var(--accent-blue),var(--accent-cyan),var(--accent-teal));
+  border-radius:4px; transition:width 0.1s linear; box-shadow:0 0 12px var(--accent-cyan);
+}
+.loader-label {
+  font-family:'IBM Plex Mono',monospace; font-size:0.76rem; letter-spacing:4px;
+  text-transform:uppercase; color:var(--accent-cyan); animation:blink 1.4s step-end infinite;
+}
+.loader-step {
+  font-family:'IBM Plex Mono',monospace; font-size:0.7rem;
+  color:rgba(255,255,255,0.4); letter-spacing:1px; min-height:18px; transition:opacity 0.3s;
+}
+@keyframes blink { 50% { opacity:0.3; } }
+
+/* ══════════════════════════════════════
+   TOAST
+══════════════════════════════════════ */
+#toast {
+  position:fixed; top:22px; right:22px; z-index:1000;
+  background:rgba(20,20,20,0.97);
+  border:1px solid rgba(0,184,112,0.38); border-left:4px solid var(--accent-green);
+  border-radius:10px; padding:14px 18px;
+  display:flex; align-items:center; gap:12px;
+  box-shadow:0 0 36px rgba(0,184,112,0.15); max-width:340px;
+  animation:toastIn 0.55s cubic-bezier(0.175,0.885,0.32,1.275) both,
+            toastOut 0.45s ease-in 4.5s both;
+}
+@keyframes toastIn  { from{transform:translateX(120%);opacity:0;} to{transform:translateX(0);opacity:1;} }
+@keyframes toastOut { to{transform:translateX(120%);opacity:0;} }
+.toast-dot {
+  width:9px; height:9px; border-radius:50%; background:var(--accent-green); flex-shrink:0;
+  animation:dotPulse 1.6s ease-in-out infinite;
+}
+@keyframes dotPulse {
+  0%,100%{transform:scale(1);box-shadow:0 0 8px var(--accent-green);}
+  50%{transform:scale(1.4);box-shadow:0 0 18px var(--accent-green);}
+}
+.toast-t1 { font-family:'Rajdhani',sans-serif; font-size:0.8rem; font-weight:700; color:var(--accent-green); letter-spacing:1.5px; text-transform:uppercase; }
+.toast-t2 { font-family:'IBM Plex Mono',monospace; font-size:0.68rem; color:var(--text-secondary); margin-top:3px; }
+
+/* ══════════════════════════════════════
+   WRAPPER
+══════════════════════════════════════ */
+.wrapper { position:relative; z-index:1; max-width:1340px; margin:0 auto; padding:28px 24px 70px; }
+
+/* ══════════════════════════════════════
+   HEADER
+══════════════════════════════════════ */
+.site-header {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:22px 0 30px; border-bottom:1px solid rgba(255,255,255,0.1); margin-bottom:38px;
+  animation:fadeDown 0.6s ease both;
+}
+@keyframes fadeDown { from{opacity:0;transform:translateY(-18px);} to{opacity:1;transform:translateY(0);} }
+.hdr-left { display:flex; align-items:center; gap:16px; }
+.hdr-icon {
+  width:52px; height:52px;
+  background:linear-gradient(135deg,rgba(0,136,204,0.25),rgba(26,108,245,0.3));
+  border:1px solid rgba(0,136,204,0.4); border-radius:12px;
+  display:flex; align-items:center; justify-content:center;
+  font-size:1.5rem; box-shadow:var(--glow);
+}
+.hdr-title { font-family:'Rajdhani',sans-serif; font-size:1.2rem; font-weight:700; letter-spacing:2px; line-height:1.2; }
+.hdr-sub { font-size:0.67rem; color:var(--text-muted); letter-spacing:3px; text-transform:uppercase; font-family:'IBM Plex Mono',monospace; margin-top:3px; }
+.hdr-right { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+
+/* ── POOL SIZE BADGE ── */
+.pool-badge {
+  display:flex; align-items:center; gap:8px;
+  background:rgba(0,136,204,0.1); border:1px solid rgba(0,136,204,0.3);
+  border-radius:30px; padding:7px 16px;
+  font-size:0.7rem; color:var(--accent-cyan);
+  font-family:'IBM Plex Mono',monospace; letter-spacing:1.5px;
+}
+
+.live-badge {
+  display:flex; align-items:center; gap:8px;
+  background:rgba(0,232,143,0.08); border:1px solid rgba(0,232,143,0.3);
+  border-radius:30px; padding:7px 16px;
+  font-size:0.7rem; color:var(--accent-green);
+  font-family:'IBM Plex Mono',monospace; letter-spacing:1.5px;
+}
+.live-dot { width:7px; height:7px; border-radius:50%; background:var(--accent-green); animation:dotPulse 1.6s ease-in-out infinite; }
+
+/* ── BACK BUTTON ── */
+#btnBack {
+  display:none; align-items:center; gap:8px;
+  background:rgba(255,255,255,0.08); border:1px solid rgba(0,136,204,0.4); border-radius:8px;
+  padding:9px 18px; font-family:'Rajdhani',sans-serif; font-size:0.88rem; font-weight:600;
+  letter-spacing:1.5px; text-transform:uppercase; color:#7ec8ff; cursor:pointer; transition:all 0.25s;
+}
+#btnBack:hover { background:rgba(0,136,204,0.15); box-shadow:var(--glow); }
+#btnBack.show  { display:flex; }
+
+/* ══════════════════════════════════════
+   VIEW TRANSITIONS
+══════════════════════════════════════ */
+#inputView { transition:opacity 0.35s; }
+#inputView.gone { display:none; }
+#dashboardView { display:none; opacity:0; transform:translateY(18px); transition:opacity 0.4s ease, transform 0.4s ease; }
+#dashboardView.show { display:block; opacity:1; transform:translateY(0); }
+
+/* ══════════════════════════════════════
+   SECTION LABELS
+══════════════════════════════════════ */
+.sec-label {
+  font-family:'IBM Plex Mono',monospace; font-size:0.64rem;
+  letter-spacing:4px; text-transform:uppercase; color:rgba(160,200,255,0.8);
+  margin-bottom:16px; display:flex; align-items:center; gap:10px;
+}
+.sec-label::before { content:''; display:block; width:22px; height:1px; background:rgba(160,200,255,0.6); }
+
+/* ══════════════════════════════════════
+   CARDS
+══════════════════════════════════════ */
+.card {
+  background:#ffffff; border:1px solid rgba(0,0,0,0.08); border-radius:16px; padding:26px 28px;
+  box-shadow:0 8px 40px rgba(0,0,0,0.45), 0 2px 8px rgba(0,0,0,0.2);
+  position:relative; overflow:hidden;
+  transition:border-color 0.3s, box-shadow 0.3s, transform 0.2s;
+  animation:fadeUp 0.5s ease both;
+}
+.card::before {
+  content:''; position:absolute; top:0; left:0; right:0; height:3px;
+  background:linear-gradient(90deg,var(--accent-blue),var(--accent-cyan),var(--accent-teal));
+}
+.card:hover { border-color:rgba(0,136,204,0.25); box-shadow:0 12px 48px rgba(0,0,0,0.5),0 0 0 1px rgba(0,136,204,0.1); transform:translateY(-2px); }
+@keyframes fadeUp { from{opacity:0;transform:translateY(22px);} to{opacity:1;transform:translateY(0);} }
+.card-title {
+  font-family:'Rajdhani',sans-serif; font-size:1.08rem; font-weight:700;
+  letter-spacing:2px; text-transform:uppercase; margin-bottom:22px;
+  display:flex; align-items:center; gap:10px; color:var(--text-card);
+}
+
+/* ══════════════════════════════════════
+   GRID
+══════════════════════════════════════ */
+.g2 { display:grid; grid-template-columns:repeat(auto-fit,minmax(360px,1fr)); gap:22px; margin-bottom:22px; }
+.g1 { margin-bottom:22px; }
+
+/* ══════════════════════════════════════
+   FORMS
+══════════════════════════════════════ */
+.form-row { display:grid; grid-template-columns:2fr 1fr 1fr 1fr 1fr; gap:10px; align-items:end; margin-bottom:12px; }
+.f-field { display:flex; flex-direction:column; gap:5px; }
+.f-label { font-family:'IBM Plex Mono',monospace; font-size:0.62rem; letter-spacing:2px; text-transform:uppercase; color:var(--text-card-muted); }
+input[type="text"], input[type="number"], input[type="file"] {
+  background:#f4f7fb; border:1px solid rgba(0,0,0,0.12); border-radius:8px;
+  padding:10px 13px; color:var(--text-card); font-family:'Exo 2',sans-serif; font-size:0.85rem;
+  outline:none; width:100%; transition:border-color 0.25s, box-shadow 0.25s;
+}
+input:focus { border-color:var(--accent-cyan); box-shadow:0 0 0 3px rgba(0,136,204,0.12); }
+input::placeholder { color:#aac0d8; }
+.t-sep { height:1px; background:linear-gradient(90deg,rgba(0,0,0,0.08),transparent); margin:12px 0; }
+
+/* ══════════════════════════════════════
+   UPLOAD ZONE
+══════════════════════════════════════ */
+.upload-zone {
+  border:2px dashed rgba(0,136,204,0.3); border-radius:12px; padding:34px; text-align:center;
+  cursor:pointer; background:#f4f7fb; transition:border-color 0.3s, background 0.3s; margin-bottom:14px;
+}
+.upload-zone:hover { border-color:var(--accent-cyan); background:#e8f2fb; }
+.up-icon { font-size:2rem; margin-bottom:10px; }
+.up-label { display:block; font-family:'Rajdhani',sans-serif; font-size:1rem; font-weight:600; color:var(--text-card-sec); letter-spacing:1px; }
+.up-sub { display:block; font-size:0.71rem; color:var(--text-card-muted); font-family:'IBM Plex Mono',monospace; margin-top:5px; }
+#fileName { font-family:'IBM Plex Mono',monospace; font-size:0.74rem; color:var(--accent-teal); margin-bottom:14px; min-height:18px; }
+
+/* ══════════════════════════════════════
+   BUTTONS
+══════════════════════════════════════ */
+.btn {
+  display:inline-flex; align-items:center; gap:8px; padding:11px 22px; border:none; border-radius:8px;
+  font-family:'Rajdhani',sans-serif; font-size:0.9rem; font-weight:600;
+  letter-spacing:1.5px; text-transform:uppercase; cursor:pointer; transition:all 0.25s;
+}
+.btn:active { transform:scale(0.97); }
+.btn-p { background:linear-gradient(135deg,var(--accent-blue),var(--accent-cyan)); color:#fff; box-shadow:0 4px 18px rgba(0,136,204,0.3); }
+.btn-p:hover { box-shadow:0 6px 26px rgba(0,136,204,0.5); }
+.btn-g { background:#f0f5ff; color:var(--accent-blue); border:1px solid rgba(0,136,204,0.25); }
+.btn-g:hover { border-color:var(--accent-cyan); background:#e4efff; }
+.btn-row { display:flex; gap:12px; margin-top:20px; flex-wrap:wrap; }
+.btn-full { width:100%; justify-content:center; }
+
+/* ══════════════════════════════════════
+   TABLES
+══════════════════════════════════════ */
+.tbl-wrap { overflow-x:auto; border-radius:10px; }
+table { width:100%; border-collapse:collapse; font-size:0.83rem; }
+thead tr { background:#f0f5ff; border-bottom:1px solid rgba(0,100,200,0.1); }
+th { padding:12px 15px; text-align:left; font-family:'IBM Plex Mono',monospace; font-size:0.65rem; letter-spacing:2px; text-transform:uppercase; color:var(--accent-blue); font-weight:500; white-space:nowrap; }
+td { padding:11px 15px; border-bottom:1px solid rgba(0,0,0,0.05); color:var(--text-card); }
+tbody tr { transition:background 0.2s; }
+tbody tr:hover { background:#f5f9ff; }
+tbody tr:last-child td { border-bottom:none; }
+
+/* ══════════════════════════════════════
+   BADGES
+══════════════════════════════════════ */
+.badge { display:inline-block; padding:3px 10px; border-radius:20px; font-family:'IBM Plex Mono',monospace; font-size:0.67rem; letter-spacing:1px; font-weight:500; white-space:nowrap; }
+.b-c { background:rgba(0,136,204,0.1);  color:#0077bb; border:1px solid rgba(0,136,204,0.25); }
+.b-g { background:rgba(0,160,90,0.1);   color:#007a44; border:1px solid rgba(0,160,90,0.3); }
+.b-o { background:rgba(200,100,0,0.1);  color:#b05a00; border:1px solid rgba(200,100,0,0.25); }
+.b-r { background:rgba(200,30,60,0.1);  color:#c0203a; border:1px solid rgba(200,30,60,0.25); }
+
+/* ══════════════════════════════════════
+   CPU BAR
+══════════════════════════════════════ */
+.cpu-bar-wrap { width:110px; height:6px; background:rgba(0,0,0,0.08); border-radius:4px; overflow:hidden; }
+.cpu-bar { height:100%; border-radius:4px; }
+.cpu-healthy  { background:#00b870; }
+.cpu-warning  { background:#e07800; }
+.cpu-moderate { background:#e07800; }
+.cpu-critical { background:#d02040; }
+
+/* ══════════════════════════════════════
+   CHARTS
+══════════════════════════════════════ */
+.chart-box { position:relative; width:100%; max-height:290px; display:flex; align-items:center; justify-content:center; padding-top:8px; }
+
+/* ══════════════════════════════════════
+   AUTO SCALING
+══════════════════════════════════════ */
+.scaling-grid { display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-top:10px; }
+
+/* ── Pool Status Bar ── */
+.pool-status-bar {
+  display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;
+  background:#f0f7ff; border:1px solid rgba(0,136,204,0.2); border-radius:10px;
+  padding:14px 18px; margin-bottom:20px;
+}
+.pool-status-left { display:flex; align-items:center; gap:10px; }
+.pool-status-label { font-family:'IBM Plex Mono',monospace; font-size:0.72rem; letter-spacing:2px; text-transform:uppercase; color:var(--text-card-sec); }
+.pool-size-number { font-family:'Rajdhani',sans-serif; font-size:1.6rem; font-weight:700; color:var(--accent-blue); line-height:1; }
+.pool-size-unit { font-family:'IBM Plex Mono',monospace; font-size:0.65rem; color:var(--text-card-muted); }
+.pool-vm-chips { display:flex; gap:6px; flex-wrap:wrap; }
+.vm-chip {
+  font-family:'IBM Plex Mono',monospace; font-size:0.68rem; padding:4px 10px;
+  border-radius:6px; background:rgba(0,136,204,0.1); color:#0077bb;
+  border:1px solid rgba(0,136,204,0.2); letter-spacing:1px;
+}
+.vm-chip.spawned { background:rgba(0,160,90,0.1); color:#007a44; border-color:rgba(0,160,90,0.3); animation:chipIn 0.4s ease both; }
+.vm-chip.removed { background:rgba(200,30,60,0.08); color:#c0203a; border-color:rgba(200,30,60,0.2); text-decoration:line-through; opacity:0.6; }
+@keyframes chipIn { from{transform:scale(0.7);opacity:0;} to{transform:scale(1);opacity:1;} }
+
+.scale-panel {
+  background:#f7faff; border:1px solid rgba(0,0,0,0.08);
+  border-radius:12px; padding:20px; transition:border-color 0.3s, box-shadow 0.3s;
+}
+.scale-panel:hover { border-color:rgba(0,136,204,0.3); box-shadow:0 4px 16px rgba(0,0,0,0.08); }
+.scale-hdr { display:flex; align-items:center; gap:10px; margin-bottom:14px; padding-bottom:12px; border-bottom:1px solid rgba(0,0,0,0.07); }
+.scale-ttl { font-family:'Rajdhani',sans-serif; font-size:0.95rem; font-weight:700; letter-spacing:2px; text-transform:uppercase; }
+.scale-tag { margin-left:auto; font-family:'IBM Plex Mono',monospace; font-size:0.63rem; color:var(--text-card-muted); }
+.panel-up   .scale-ttl { color:#007a44; }
+.panel-down .scale-ttl { color:#b05a00; }
+
+.scale-item {
+  display:flex; align-items:flex-start; gap:10px; padding:10px 12px;
+  border-radius:8px; margin-bottom:7px;
+  font-size:0.79rem; font-family:'IBM Plex Mono',monospace;
+  color:var(--text-card-sec); transition:background 0.2s;
+  animation:fadeUp 0.35s ease both; line-height:1.5;
+}
+.scale-item.up   { background:#edfbf4; border-left:3px solid #00b870; }
+.scale-item.down { background:#fff7ee; border-left:3px solid #f07c00; }
+.scale-item:hover { filter:brightness(0.97); }
+.a-up   { color:#007a44; font-size:0.9rem; flex-shrink:0; margin-top:2px; }
+.a-down { color:#b05a00; font-size:0.9rem; flex-shrink:0; margin-top:2px; }
+.scale-empty { font-family:'IBM Plex Mono',monospace; font-size:0.71rem; color:var(--text-card-muted); text-align:center; padding:18px; letter-spacing:1px; }
+
+/* ── Action label inside scale item ── */
+.scale-action {
+  display:inline-block; font-size:0.6rem; padding:1px 7px; border-radius:4px;
+  font-weight:600; letter-spacing:1px; text-transform:uppercase; margin-left:6px; vertical-align:middle;
+}
+.action-spawned { background:rgba(0,160,90,0.15); color:#007a44; }
+.action-removed { background:rgba(200,30,60,0.1);  color:#c0203a; }
+.action-capped  { background:rgba(200,100,0,0.1);  color:#b05a00; }
+
+/* ══════════════════════════════════════
+   REALTIME BANNER
+══════════════════════════════════════ */
+.rt-banner {
+  display:flex; align-items:center; gap:10px; padding:11px 16px; margin-bottom:20px;
+  background:#f0faf5; border:1px solid rgba(0,160,90,0.25); border-radius:8px;
+}
+.rt-banner span { font-family:'IBM Plex Mono',monospace; font-size:0.7rem; color:#3a6a50; letter-spacing:0.8px; }
+
+/* ══════════════════════════════════════
+   DIVIDER
+══════════════════════════════════════ */
+.divider { height:1px; background:linear-gradient(90deg,transparent,rgba(255,255,255,0.12),transparent); margin:32px 0; }
+
+/* ══════════════════════════════════════
+   STAGGER
+══════════════════════════════════════ */
+.card:nth-child(1){animation-delay:0.04s}
+.card:nth-child(2){animation-delay:0.09s}
+.card:nth-child(3){animation-delay:0.14s}
+.card:nth-child(4){animation-delay:0.19s}
+.card:nth-child(5){animation-delay:0.24s}
+
+/* ══════════════════════════════════════
+   RESPONSIVE
+══════════════════════════════════════ */
+@media(max-width:800px){
+  .form-row      { grid-template-columns:1fr 1fr; }
+  .scaling-grid  { grid-template-columns:1fr; }
+  .site-header   { flex-direction:column; align-items:flex-start; gap:14px; }
+  .hdr-right     { flex-wrap:wrap; }
+  .pool-status-bar { flex-direction:column; align-items:flex-start; }
+}
+</style>
+</head>
+<body>
+
+<!-- ══ LOADER ══ -->
+<div id="loader">
+  <div class="loader-orbit">
+    <div class="orbit-ring r1"></div>
+    <div class="orbit-ring r2"></div>
+    <div class="orbit-ring r3"></div>
+  </div>
+  <div class="loader-pct" id="loaderPct">0%</div>
+  <div class="progress-track"><div class="progress-fill" id="loaderFill"></div></div>
+  <div class="loader-label">Processing Dataset</div>
+  <div class="loader-step" id="loaderStep">Initializing...</div>
+</div>
+
+<!-- ══ TOAST ══ -->
+<div id="toast">
+  <div class="toast-dot"></div>
+  <div>
+    <div class="toast-t1">Auto-Scaling Engine Active</div>
+    <div class="toast-t2">VM pool adjusted — results loaded successfully</div>
+  </div>
+</div>
+
+<div class="wrapper">
+
+  <!-- ══ HEADER ══ -->
+  <header class="site-header">
+    <div class="hdr-left">
+      <div class="hdr-icon">🛡️</div>
+      <div>
+        <div class="hdr-title">SECURE INTELLIGENT TASK ALLOCATION SYSTEM</div>
+        <div class="hdr-sub">AI-Powered VM Scheduling &amp; Auto-Scaling Engine</div>
+      </div>
+    </div>
+    <div class="hdr-right">
+      {% if results %}
+      <div class="pool-badge">🖥 VM POOL: {{ pool_size }} ACTIVE</div>
+      {% endif %}
+      <button id="btnBack" onclick="goBack()">← Back to Upload</button>
+      <div class="live-badge"><div class="live-dot"></div>SYSTEM ONLINE</div>
+    </div>
+  </header>
+
+
+  <!-- ══ ERROR BANNER ══ -->
+  {% if error_msg %}
+  <div id="errorBanner" style="background:#fff1f2;border:1px solid rgba(200,30,60,0.3);border-left:4px solid #e03050;border-radius:10px;padding:16px 20px;margin-bottom:28px;display:flex;align-items:flex-start;gap:14px;box-shadow:0 4px 20px rgba(200,30,60,0.12);animation:fadeUp 0.4s ease both;">
+    <span style="font-size:1.3rem;flex-shrink:0;">⚠️</span>
+    <div>
+      <div style="font-family:'Rajdhani',sans-serif;font-size:0.95rem;font-weight:700;color:#c0203a;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:5px;">Processing Error</div>
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:0.75rem;color:#7a2030;line-height:1.6;">{{ error_msg }}</div>
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:0.68rem;color:#b05060;margin-top:8px;">Check your terminal for the full traceback. Common causes: wrong column names in Excel, missing values, or model input shape mismatch.</div>
+    </div>
+    <button onclick="document.getElementById('errorBanner').style.display='none'" style="margin-left:auto;background:none;border:none;color:#c0203a;font-size:1.1rem;cursor:pointer;flex-shrink:0;padding:0 4px;">✕</button>
+  </div>
+  {% endif %}
+  <!-- ════════════════════════════════
+       INPUT VIEW
+  ════════════════════════════════ -->
+  <div id="inputView">
+    <div class="sec-label">01 — Task Input</div>
+    <div class="g2">
+
+      <!-- MANUAL -->
+      <div class="card">
+        <div class="card-title">⌨️ Manual Task Entry</div>
+        <form method="POST" onsubmit="handleSubmit(event, this)">
+          <div id="taskList">
+            <div class="task-block">
+              <div class="form-row">
+                <div class="f-field"><label class="f-label">Task Name</label><input type="text" name="task[]" placeholder="e.g. data-processor-01" required></div>
+                <div class="f-field"><label class="f-label">CPU %</label><input type="number" name="cpu[]" placeholder="0–100" min="0" max="100"></div>
+                <div class="f-field"><label class="f-label">Memory MB</label><input type="number" name="memory[]" placeholder="512"></div>
+                <div class="f-field"><label class="f-label">Priority</label><input type="number" name="priority[]" placeholder="1–3" min="1" max="3"></div>
+                <div class="f-field"><label class="f-label">Security</label><input type="number" name="security[]" placeholder="1–3" min="1" max="3"></div>
+              </div>
+              <div class="t-sep"></div>
+            </div>
+          </div>
+          <div class="btn-row">
+            <button type="button" class="btn btn-g" onclick="addTask()">＋ Add Task</button>
+            <button type="submit" class="btn btn-p">⚡ Allocate Tasks</button>
+          </div>
+        </form>
+      </div>
+
+      <!-- UPLOAD -->
+      <div class="card">
+        <div class="card-title">📂 Dataset Upload</div>
+        <form method="POST" enctype="multipart/form-data" onsubmit="handleSubmit(event, this)">
+          <div class="upload-zone" onclick="document.getElementById('xlsxFile').click()">
+            <div class="up-icon">📊</div>
+            <span class="up-label">Drop your Excel dataset here</span>
+            <span class="up-sub">Supports .xlsx — click to browse</span>
+          </div>
+          <input type="file" id="xlsxFile" name="excel" accept=".xlsx" style="display:none" onchange="previewFile(this)">
+          <div id="fileName"></div>
+          <button type="submit" class="btn btn-p btn-full">🚀 Upload &amp; Process</button>
+        </form>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════
+       DASHBOARD VIEW
+  ════════════════════════════════ -->
+  <div id="dashboardView">
+
+  {% if results %}
+
+    <!-- 02 — ALLOCATION RESULTS -->
+    <div class="sec-label">02 — Allocation Results</div>
+    <div class="g1 card">
+      <div class="card-title">📋 Scheduling Results
+        <span style="font-size:0.67rem;color:var(--text-muted);font-family:'IBM Plex Mono',monospace;font-weight:400;margin-left:8px;">First 10 rows</span>
+      </div>
+      <div class="tbl-wrap">
+        <table>
+          <thead>
+            <tr><th>Task</th><th>CPU %</th><th>Memory</th><th>Priority</th><th>Security</th><th>Risk</th><th>VM</th><th>Reason</th></tr>
+          </thead>
+          <tbody>
+            {% for r in results %}
+            <tr>
+              <td>{{ r.Task }}</td>
+              <td>{{ r.CPU }}</td>
+              <td>{{ r.Memory }}</td>
+              <td>{{ r.Priority }}</td>
+              <td>{{ r.Security }}</td>
+              <td>
+                {% if r.Risk >= 6 %}<span class="badge b-r">{{ r.Risk }}</span>
+                {% elif r.Risk >= 4 %}<span class="badge b-o">{{ r.Risk }}</span>
+                {% else %}<span class="badge b-g">{{ r.Risk }}</span>{% endif %}
+              </td>
+              <td><span class="badge b-c">{{ r.VM }}</span></td>
+              <td style="color:#4a6a88;font-size:0.79rem;">{{ r.Reason }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- 03 — VM OVERVIEW -->
+    <div class="sec-label">03 — VM Overview</div>
+    <div class="g2">
+
+      <!-- VM SUMMARY -->
+      <div class="card">
+        <div class="card-title">🖥️ VM Allocation Summary</div>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Virtual Machine</th><th>Tasks Assigned</th><th>Sample Tasks</th><th>Classification</th></tr></thead>
+            <tbody>
+              {% for v in vm_summary %}
+              <tr>
+                <td><span class="badge b-c">{{ v.vm }}</span></td>
+                <td>
+                  <span style="font-family:'Rajdhani',sans-serif;font-size:1.1rem;font-weight:700;color:var(--accent-blue);">{{ v.count }}</span>
+                </td>
+                <td style="color:#4a6a88;font-size:0.79rem;">{{ v.sample }}</td>
+                <td style="color:#4a6a88;font-size:0.79rem;">{{ v.reason }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- VM HEALTH -->
+      <div class="card">
+        <div class="card-title">💓 VM Health Monitor</div>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>VM</th><th>CPU Load</th><th>Health State</th><th>Status</th></tr></thead>
+            <tbody>
+              {% for vm, data in vm_health.items() %}
+              <tr>
+                <td><span class="badge b-c">{{ vm }}</span></td>
+                <td>
+                  <div style="display:flex;align-items:center;gap:10px;">
+                    <div class="cpu-bar-wrap">
+                      <div class="cpu-bar cpu-{{ data.status|lower }}" style="width:{{ [data.cpu,100]|min if data.cpu > 0 else 0 }}%"></div>
+                    </div>
+                    <span style="font-family:'IBM Plex Mono',monospace;font-size:0.78rem;color:#1a3a5a;">{{ data.cpu }}%</span>
+                  </div>
+                </td>
+                <td style="font-family:'IBM Plex Mono',monospace;font-size:0.77rem;color:#4a6a88;">{{ data.state }}</td>
+                <td>
+                  {% if data.status == 'Healthy' %}<span class="badge b-g">{{ data.status }}</span>
+                  {% elif data.status == 'Warning' %}<span class="badge b-o">{{ data.status }}</span>
+                  {% else %}<span class="badge b-r">{{ data.status }}</span>{% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- 04 — ANALYTICS -->
+    <div class="sec-label">04 — Analytics</div>
+    <div class="g2">
+      <div class="card">
+        <div class="card-title">🍩 VM Task Distribution</div>
+        <div class="chart-box"><canvas id="pieChart"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-title">📊 CPU Load per VM</div>
+        <div class="chart-box"><canvas id="cpuChart"></canvas></div>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- 05 — AUTO SCALING ENGINE -->
+    <div class="sec-label">05 — Auto Scaling Engine</div>
+    <div class="g1 card">
+      <div class="card-title">⚙️ Auto Scaling Engine
+        <span style="font-size:0.7rem;font-family:'IBM Plex Mono',monospace;font-weight:400;color:var(--text-card-muted);margin-left:8px;letter-spacing:1px;">LIVE VM POOL MANAGEMENT</span>
+      </div>
+
+      <!-- Pool status bar -->
+      <div class="pool-status-bar">
+        <div class="pool-status-left">
+          <div>
+            <div class="pool-status-label">Active VM Pool</div>
+            <div style="display:flex;align-items:baseline;gap:6px;margin-top:4px;">
+              <div class="pool-size-number">{{ pool_size }}</div>
+              <div class="pool-size-unit">VMs running</div>
+            </div>
+          </div>
+        </div>
+        <div class="pool-vm-chips">
+          {% for vm, data in vm_health.items() %}
+            {% if scale_up and vm in scale_up|join %}
+              <div class="vm-chip spawned">{{ vm }} ✦ new</div>
+            {% elif scale_down and vm in scale_down|join %}
+              <div class="vm-chip removed">{{ vm }}</div>
+            {% else %}
+              <div class="vm-chip">{{ vm }}</div>
+            {% endif %}
+          {% endfor %}
+        </div>
+        <div class="rt-banner" style="margin:0;flex:none;">
+          <div class="live-dot"></div>
+          <span>REAL-TIME CPU MONITORING ACTIVE</span>
+        </div>
+      </div>
+
+      <div class="scaling-grid">
+
+        <!-- SCALE UP -->
+        <div class="scale-panel panel-up">
+          <div class="scale-hdr">
+            <span style="font-size:1.15rem;">⬆️</span>
+            <div class="scale-ttl">Scale Up</div>
+            <div class="scale-tag">
+              {% if scale_up %}{{ scale_up|length }} ACTION(S) TAKEN{% else %}NO ACTION NEEDED{% endif %}
+            </div>
+          </div>
+          {% if scale_up %}
+            {% for s in scale_up %}
+            <div class="scale-item up">
+              <span class="a-up">▲</span>
+              <span>
+                {{ s }}
+                {% if 'spawned' in s %}<span class="scale-action action-spawned">SPAWNED</span>
+                {% elif 'capacity' in s %}<span class="scale-action action-capped">AT CAP</span>{% endif %}
+              </span>
+            </div>
+            {% endfor %}
+          {% else %}
+            <div class="scale-empty">— All VMs within normal load range —</div>
+          {% endif %}
+        </div>
+
+        <!-- SCALE DOWN -->
+        <div class="scale-panel panel-down">
+          <div class="scale-hdr">
+            <span style="font-size:1.15rem;">⬇️</span>
+            <div class="scale-ttl">Scale Down</div>
+            <div class="scale-tag">
+              {% if scale_down %}{{ scale_down|length }} ACTION(S) TAKEN{% else %}NO ACTION NEEDED{% endif %}
+            </div>
+          </div>
+          {% if scale_down %}
+            {% for s in scale_down %}
+            <div class="scale-item down">
+              <span class="a-down">▼</span>
+              <span>
+                {{ s }}
+                {% if 'decommissioned' in s %}<span class="scale-action action-removed">REMOVED</span>{% endif %}
+              </span>
+            </div>
+            {% endfor %}
+          {% else %}
+            <div class="scale-empty">— No underutilised VMs to decommission —</div>
+          {% endif %}
+        </div>
+
+      </div>
+    </div>
+
+    <!-- CHARTS SCRIPT -->
+    <script>
+      const vmCount = {{ vm_count | tojson }};
+      const vmLoad  = {{ vm_load  | tojson }};
+      const palette = ['#1a6cf5','#0088cc','#00a99d','#00b870','#f07c00','#d02040','#7c3aed','#d4a000'];
+
+      new Chart(document.getElementById('pieChart'), {
+        type: 'doughnut',
+        data: {
+          labels: Object.keys(vmCount),
+          datasets: [{ data: Object.values(vmCount), backgroundColor: palette, borderWidth: 3, borderColor: '#ffffff', hoverOffset: 10 }]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: { position:'right', labels:{ color:'#1a3a5a', font:{ family:'IBM Plex Mono', size:11 }, padding:14 } }
+          },
+          cutout: '60%'
+        }
+      });
+
+      new Chart(document.getElementById('cpuChart'), {
+        type: 'bar',
+        data: {
+          labels: Object.keys(vmLoad),
+          datasets: [{
+            label: 'Avg CPU Load (%)',
+            data: Object.values(vmLoad),
+            backgroundColor: Object.values(vmLoad).map(v => v > 80 ? 'rgba(208,32,64,0.7)' : v > 60 ? 'rgba(224,120,0,0.7)' : 'rgba(0,136,204,0.65)'),
+            borderColor:      Object.values(vmLoad).map(v => v > 80 ? '#d02040' : v > 60 ? '#e07800' : '#0088cc'),
+            borderWidth: 1.5, borderRadius: 6
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: { legend:{ labels:{ color:'#1a3a5a', font:{ family:'IBM Plex Mono', size:11 } } } },
+          scales: {
+            x: { ticks:{ color:'#3a5a78', font:{ family:'IBM Plex Mono', size:10 } }, grid:{ color:'rgba(0,0,0,0.05)' } },
+            y: { beginAtZero:true, max:100, ticks:{ color:'#3a5a78', font:{ family:'IBM Plex Mono', size:10 } }, grid:{ color:'rgba(0,0,0,0.05)' } }
+          }
+        }
+      });
+    </script>
+
+  {% endif %}
+
+  </div><!-- /dashboardView -->
+
+</div><!-- /wrapper -->
+
+<script>
+/* ── LOADER STEPS ── */
+const steps = [
+  'Initializing secure pipeline...',
+  'Parsing dataset rows...',
+  'Evaluating CPU & memory metrics...',
+  'Running risk classification...',
+  'Assigning VMs via AI engine...',
+  'Executing auto-scaling decisions...',
+  'Building VM health monitor...',
+  'Finalizing results dashboard...'
+];
+
+/* ── SUBMIT HANDLER ──
+   Simple, reliable approach:
+   1. Show loader instantly (requestAnimationFrame ensures it paints)
+   2. After 1 frame, submit the form normally
+   3. Browser navigates to result page — DOMContentLoaded hides loader
+   This works 100% because we never fight the browser navigation model.
+── */
+function handleSubmit(e, form) {
+  e.preventDefault();
+
+  const loader = document.getElementById('loader');
+  const fill   = document.getElementById('loaderFill');
+  const pctEl  = document.getElementById('loaderPct');
+  const stepEl = document.getElementById('loaderStep');
+
+  // Force loader visible
+  loader.style.display = 'flex';
+  loader.classList.add('active');
+
+  let p = 0, stepIdx = 0;
+  stepEl.textContent = steps[0];
+
+  // Animate progress bar — runs until page navigates away
+  // Bar slows down near 95% and never hits 100 on its own
+  const iv = setInterval(() => {
+    if (p < 60)      p += 1.8;   // fast start
+    else if (p < 85) p += 0.7;   // medium
+    else if (p < 95) p += 0.15;  // slow crawl — waiting for server
+    else             p += 0.02;  // barely moves at 95%+
+
+    p = Math.min(p, 99);
+    fill.style.width = p + '%';
+    pctEl.textContent = Math.floor(p) + '%';
+
+    // Cycle through step labels based on progress
+    const ns = Math.min(Math.floor((p / 95) * steps.length), steps.length - 1);
+    if (ns !== stepIdx) {
+      stepIdx = ns;
+      stepEl.style.opacity = '0';
+      setTimeout(() => {
+        stepEl.textContent = steps[ns];
+        stepEl.style.opacity = '1';
+      }, 150);
+    }
+
+    // Switch to waiting message after all steps shown
+    if (p >= 95 && stepIdx === steps.length - 1) {
+      stepEl.style.opacity = '0';
+      setTimeout(() => {
+        if (p >= 95) {
+          stepEl.textContent = 'AI engine processing — awaiting server response...';
+          stepEl.style.opacity = '1';
+        }
+      }, 150);
+      stepIdx = 999; // prevent re-triggering
+    }
+  }, 120);
+
+  // Wait 2 animation frames so the browser paints the loader,
+  // then submit — loader stays visible until the new page loads
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        form.submit();
+      }, 80);
+    });
+  });
+}
+
+/* ── ADD TASK ROW ── */
+function addTask() {
+  document.getElementById('taskList').insertAdjacentHTML('beforeend', `
+    <div class="task-block">
+      <div class="form-row">
+        <div class="f-field"><label class="f-label">Task Name</label><input type="text" name="task[]" placeholder="e.g. task-name"></div>
+        <div class="f-field"><label class="f-label">CPU %</label><input type="number" name="cpu[]" placeholder="0–100" min="0" max="100"></div>
+        <div class="f-field"><label class="f-label">Memory MB</label><input type="number" name="memory[]" placeholder="512"></div>
+        <div class="f-field"><label class="f-label">Priority</label><input type="number" name="priority[]" placeholder="1–3" min="1" max="3"></div>
+        <div class="f-field"><label class="f-label">Security</label><input type="number" name="security[]" placeholder="1–3" min="1" max="3"></div>
+      </div>
+      <div class="t-sep"></div>
+    </div>
+  `);
+}
+
+/* ── FILE PREVIEW ── */
+function previewFile(input) {
+  document.getElementById('fileName').textContent =
+    input.files.length ? '📎  ' + input.files[0].name : '';
+}
+
+/* ── SHOW DASHBOARD ── */
+function showDashboard() {
+  document.getElementById('inputView').classList.add('gone');
+  const dash = document.getElementById('dashboardView');
+  dash.style.display = 'block';
+  requestAnimationFrame(() => requestAnimationFrame(() => dash.classList.add('show')));
+  document.getElementById('btnBack').classList.add('show');
+  const t = document.getElementById('toast');
+  t.style.display = 'flex';
+  setTimeout(() => { t.style.display = 'none'; }, 5000);
+}
+
+/* ── BACK BUTTON ── */
+function goBack() {
+  const dash = document.getElementById('dashboardView');
+  dash.classList.remove('show');
+  setTimeout(() => { dash.style.display = 'none'; }, 400);
+  document.getElementById('inputView').classList.remove('gone');
+  document.getElementById('btnBack').classList.remove('show');
+}
+
+/* ── ON LOAD ── */
+document.addEventListener('DOMContentLoaded', () => {
+  // Always kill the loader the moment the result page finishes loading
+  const loader = document.getElementById('loader');
+  if (loader) {
+    loader.classList.remove('active');
+    loader.style.display = 'none';
+  }
+  // Also reset fill so next upload starts from 0
+  const fill = document.getElementById('loaderFill');
+  if (fill) fill.style.width = '0%';
+
+  {% if results %}
+    showDashboard();
+  {% else %}
+    const toast = document.getElementById('toast');
+    if (toast) toast.style.display = 'none';
+  {% endif %}
+});
+</script>
+</body>
+</html>
