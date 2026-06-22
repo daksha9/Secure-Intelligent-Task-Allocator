@@ -1,0 +1,31 @@
+secure_task_scheduler/
+│
+├── venv/                       # Python virtual environment (dependencies)
+│
+├── uploads/                    # Uploaded Excel datasets from UI
+│
+├── templates/
+│   └── index.html              # Frontend dashboard & task input interface
+│
+├── static/
+│   ├── styles.css              # Dashboard styling
+│   └── chart.js                # Charts & frontend scripts
+│
+├── model/
+│   ├── train_model.py          # Deep learning model training script
+│   ├── vm_model.h5             # Trained neural network model
+│   ├── vm_model.pkl            # Preprocessing scaler/model
+│   └── train_model.py.save     # Training checkpoint
+│
+├── database/
+│   └── task.db                 # SQLite database storing task logs
+│
+├── VM_allocator_model.pkl      # ML model for predicting VM allocation
+│
+├── task_dataset.csv            # Dataset used for training the model
+│
+├── dataset_generated.py        # Script to generate synthetic datasets
+│
+├── requirements.txt            # Python dependencies
+│
+└── app.py                      # Main Flask backend (scheduling + autoscaling)
